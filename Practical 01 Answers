@@ -1,0 +1,126 @@
+CREATE TABLE Department (
+DeptNo NUMBER(3) PRIMARY KEY,
+DeptName CHAR(20),
+Location VARCHAR(20)
+);
+
+CREATE TABLE Employee (
+EmpNo VARCHAR(20) PRIMARY KEY, 
+fname CHAR(20), 
+lname CHAR(20), 
+address VARCHAR(40),
+salary INTEGER, 
+DeptNo NUMBER(3),
+CONSTRAINT emp_fk_dept FOREIGN KEY(DeptNo) REFERENCES Department(DeptNo) 
+);
+
+CREATE TABLE Project (
+ProjNo CHAR(5) PRIMARY KEY, 
+Project_Name VARCHAR(20), 
+DeptNo NUMBER(3),
+CONSTRAINT proj_fk_dept FOREIGN KEY(DeptNo) REFERENCES Department(DeptNo)
+);
+
+CREATE TABLE Works_On(
+EmpNo VARCHAR(20), 
+ProjNo CHAR(5),
+DateWorked DATE,
+Hours NUMBER(2),
+CONSTRAINT works_on_pk PRIMARY KEY(EmpNo, ProjNo, DateWorked),
+CONSTRAINT works_fk_emp FOREIGN KEY(EmpNo) REFERENCES Employee(EmpNo),	
+CONSTRAINT works_fk_proj FOREIGN KEY(ProjNo) REFERENCES Project(ProjNo)
+);
+
+INSERT INTO Department VALUES (001, 'Accounts', 'Bangalore');
+INSERT INTO Department VALUES (002, 'IT', 'Mumbai');
+INSERT INTO Department VALUES (003, 'ECE', 'Mumbai');
+INSERT INTO Department VALUES (004, 'ISE', 'Mumbai');
+INSERT INTO Department VALUES (005, 'CSE', 'Delhi');
+
+INSERT INTO Employee VALUES ('Emp01', 'John', 'Scott', 'Mysore', 45000, 003);
+INSERT INTO Employee VALUES ('Emp02', 'James', 'Smith', 'Bangalore', 50000, 005);
+INSERT INTO Employee VALUES ('Emp03', 'Edward', 'Hedge', 'Bangalore', 65000, 002);
+INSERT INTO Employee VALUES ('Emp04', 'Santhosh', 'Kumar', 'Delhi', 80000, 002);
+INSERT INTO Employee VALUES ('Emp05', 'Veena', 'M', 'Mumbai', 45000, 004);
+
+INSERT INTO Project VALUES ('P01', 'IOT', 005);
+INSERT INTO Project VALUES ('P02', 'Cloud', 005);
+INSERT INTO Project VALUES ('P03', 'BankMgmt', 004);
+INSERT INTO Project VALUES ('P04', 'Sensors', 003);
+INSERT INTO Project VALUES ('P05', 'BigData', 002);
+
+INSERT INTO Works_On VALUES ('Emp02', 'P03', TO_DATE('02-OCT-2018', 'DD-MON-YYYY'), 4);
+INSERT INTO Works_On VALUES ('Emp01', 'P02', TO_DATE('22-JAN-2014', 'DD-MON-YYYY'), 13);
+INSERT INTO Works_On VALUES ('Emp02', 'P02', TO_DATE('19-JUN-2020', 'DD-MON-YYYY'), 15);
+INSERT INTO Works_On VALUES ('Emp02', 'P01', TO_DATE('11-JUN-2020', 'DD-MON-YYYY'), 10);
+INSERT INTO Works_On VALUES ('Emp01', 'P04', TO_DATE('08-FEB-2009', 'DD-MON-YYYY'), 6);
+INSERT INTO Works_On VALUES ('Emp02', 'P01', TO_DATE('18-OCT-2018', 'DD-MON-YYYY'), 18);
+INSERT INTO Works_On VALUES ('Emp01', 'P05', TO_DATE('02-SEP-2011', 'DD-MON-YYYY'), 7);
+
+-- Q1
+
+SELECT e.fname, e.lname, e.address
+FROM Employee e
+JOIN Department d ON e.DeptNo = d.DeptNo
+WHERE d.DeptName = 'IT';
+
+--or--
+
+SELECT e.fname, e.lname, e.address
+FROM Employee e, Department d
+WHERE e.DeptNo = d.DeptNo AND d.DeptName = 'IT';
+
+--Q2
+
+SELECT EmpNo, salary
+FROM Employee;
+
+SELECT DISTINCT salary
+FROM Employee;
+
+--Q3
+
+SELECT e.fname, e.lname, SUM(w.HOURS) AS total_hours
+FROM Employee e, Works_On w
+WHERE e.DEPTNO = 005 AND e.EMPNO = w.EMPNO AND w.PROJNO = 'P01' 
+GROUP BY e.EmpNo, e.fname, e.lname
+HAVING SUM(w.HOURS) > 10;
+
+--or--
+
+SELECT e.fname, e.lname
+FROM Employee e
+JOIN Works_On w ON e.EmpNo = w.EmpNo
+WHERE e.DeptNo = 005 AND w.ProjNo = 'P01'
+GROUP BY e.EmpNo, e.fname, e.lname
+HAVING SUM(w.Hours) > 10;
+
+--Q4
+
+SELECT d.DeptName, e.lname, e.fname, p.Project_Name
+FROM Employee e, Department d, Works_On w, Project p
+WHERE e.DeptNo = d.DeptNo AND e.EmpNo = w.EmpNo AND w.ProjNo = p.ProjNo
+ORDER BY d.DeptName, e.lname, e.fname;
+
+--or--
+
+SELECT d.DeptName, e.lname, e.fname, p.Project_Name
+FROM Employee e
+JOIN Department d ON e.DeptNo = d.DeptNo
+JOIN Works_On w ON e.EmpNo = w.EmpNo
+JOIN Project p ON w.ProjNo = p.ProjNo
+ORDER BY d.DeptName, e.lname, e.fname;
+
+--Q5
+
+SELECT DISTINCT e.EmpNo, e.fname, e.lname, e.salary AS original_salary, e.salary * 1.10 AS increased_salary
+FROM Employee e, Works_On w, Project p
+WHERE w.ProjNo = p.ProjNo AND e.EmpNo = w.EmpNo AND p.Project_Name = 'IOT';
+
+--or--
+
+SELECT DISTINCT e.EmpNo, e.fname, e.lname, e.salary AS original_salary, e.salary * 1.10 AS increased_salary
+FROM Employee e
+JOIN Works_On w ON e.EmpNo = w.EmpNo
+JOIN Project p ON w.ProjNo = p.ProjNo
+WHERE p.Project_Name = 'IOT';
