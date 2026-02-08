@@ -1,0 +1,143 @@
+--Create an incomplete type for Department
+CREATE TYPE Dept_t;
+/
+
+-- Employee Object Type
+CREATE TYPE Emp_t AS OBJECT (
+    eno     NUMBER(4),
+    ename   VARCHAR2(15),
+    edept   REF Dept_t,
+    salary  NUMBER(8,2)
+);
+/
+
+-- Department Object Type
+CREATE TYPE Dept_t AS OBJECT (
+    dno     NUMBER(2),
+    dname   VARCHAR2(12),
+    mgr     REF Emp_t
+);
+/
+
+-- Project Object Type
+CREATE TYPE Proj_t AS OBJECT (
+    pno     NUMBER(4),
+    pname   VARCHAR2(15),
+    pdept   REF Dept_t,
+    budget  NUMBER(10,2)
+);
+/
+commit;
+
+-- Create Tables 
+
+--create Dept table without scope
+CREATE TABLE Dept OF Dept_t (
+    dno PRIMARY KEY,
+    dname NOT NULL
+)
+/
+
+CREATE TABLE Emp OF Emp_t (
+    eno PRIMARY KEY,
+    ename NOT NULL,
+    SCOPE FOR (edept) IS Dept,
+    salary CHECK (salary > 0)
+)
+/
+
+--alter Dept table to add scope for mgr
+ALTER TABLE Dept
+ADD SCOPE FOR (mgr) IS Emp;
+/
+
+CREATE TABLE Proj OF Proj_t (
+    pno PRIMARY KEY,
+    pname NOT NULL,
+    SCOPE FOR (pdept) IS Dept,
+    budget CHECK (budget > 0)
+)
+/
+commit;
+
+
+-- Insert departments without manager
+INSERT INTO Dept VALUES(Dept_t(10, 'IT', NULL));
+INSERT INTO Dept VALUES(Dept_t(20, 'HR', NULL));
+
+commit;
+
+SELECT object_name, object_type, object_id
+FROM user_objects
+WHERE object_name = 'DEPT';
+
+
+-- Insert employees 
+INSERT INTO Emp VALUES(Emp_t(101, 'Alice', (SELECT REF(d) FROM Dept d WHERE d.dno = 10), 70000));
+INSERT INTO Emp VALUES(Emp_t(102, 'Bob', (SELECT REF(d) FROM Dept d WHERE d.dno = 10), 65000));
+INSERT INTO Emp VALUES(Emp_t(103, 'Carol', (SELECT REF(d) FROM Dept d WHERE d.dno = 20), 60000));
+
+-- Update departments to assign managers
+UPDATE Dept d
+SET mgr = (SELECT REF(e) FROM Emp e WHERE e.eno = 101)
+WHERE d.dno = 10;
+
+UPDATE Dept d
+SET mgr = (SELECT REF(e) FROM Emp e WHERE e.eno = 103)
+WHERE d.dno = 20;
+
+commit;
+
+-- Insert projects
+INSERT INTO Proj VALUES(Proj_t(1001, 'AI System', (SELECT REF(d) FROM Dept d WHERE d.dno = 10), 75000));
+INSERT INTO Proj VALUES(Proj_t(1002, 'Payroll', (SELECT REF(d) FROM Dept d WHERE d.dno = 20), 45000));
+INSERT INTO Proj VALUES(Proj_t(1003, 'Website', (SELECT REF(d) FROM Dept d WHERE d.dno = 10), 60000));
+
+
+--c
+SELECT d.dno AS Dept_Number,
+d.mgr.ename AS Manager_name, 
+d.mgr.salary AS Manager_Salary
+FROM Dept d
+
+--d
+
+SELECT p.pname AS Project_Name,
+       p.pdept.mgr.ename AS Mmanager_Name
+FROM Proj p
+WHERE p.budget > 50000;
+
+
+--e
+
+SELECT p.pdept.dno AS dept_no,
+       p.pdept.dname AS dept_name,
+       SUM(p.budget) AS total_budget
+FROM Proj p
+GROUP BY p.pdept.dno, p.pdept.dname;
+
+
+--f
+
+SELECT p.pdept.mgr.ename AS manager_name
+FROM Proj p
+WHERE  p.budget = (SELECT MAX(budget) FROM Proj);
+
+
+--g
+
+SELECT p.pdept.mgr.eno AS manager_employee_number,
+       SUM(p.budget) AS total_control_budget
+FROM Proj p
+GROUP BY p.pdept.mgr.eno
+HAVING SUM(p.budget) > 60000;
+
+--h
+SELECT p.pdept.mgr.eno AS manager_employee_number,
+       SUM(p.budget) AS total_control_budget
+FROM Proj p
+GROUP BY p.pdept.mgr.eno
+ORDER BY SUM(p.budget) DESC
+FETCH FIRST 1 ROW ONLY;
+
+
