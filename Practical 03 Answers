@@ -1,0 +1,202 @@
+CREATE TYPE Depend_t AS OBJECT (
+    depname       VARCHAR2(12),
+    gender        CHAR(1),
+    bdate         DATE,
+    relationship  VARCHAR2(10)
+);
+/
+
+CREATE TYPE Dependtb_t AS TABLE OF Depend_t;
+/
+
+CREATE TYPE Dept_t;
+/
+
+CREATE TYPE Emp_t AS OBJECT (
+    eno         NUMBER(4),
+    ename       VARCHAR2(15),
+    edept       REF Dept_t,
+    salary      NUMBER(8,2),
+    dependents  Dependtb_t
+);
+/
+
+CREATE TYPE Dept_t AS OBJECT (
+    dno    NUMBER(2),
+    dname  VARCHAR2(12),
+    mgr    REF Emp_t
+);
+/
+
+CREATE TYPE Proj_t AS OBJECT (
+    pno     NUMBER(4),
+    pname   VARCHAR2(15),
+    pdept   REF Dept_t,
+    budget  NUMBER(10,2)
+);
+/
+
+CREATE TYPE Work_t AS OBJECT (
+    wemp   REF Emp_t,
+    wproj  REF Proj_t,
+    since  DATE,
+    hours  NUMBER(4,2)
+);
+/
+
+CREATE TABLE Dept OF Dept_t (
+    dno PRIMARY KEY,
+    dname NOT NULL
+);
+
+CREATE TABLE Emp OF Emp_t (
+    eno PRIMARY KEY,
+    ename NOT NULL,
+    edept REFERENCES Dept,
+    salary CHECK (salary > 0)
+)
+NESTED TABLE dependents STORE AS dependent_tb;
+
+ALTER TABLE Dept
+ADD CONSTRAINT dept_mgr_fk
+FOREIGN KEY (mgr)
+REFERENCES Emp;
+
+CREATE TABLE Proj OF Proj_t (
+    pno PRIMARY KEY,
+    pname NOT NULL,
+    pdept REFERENCES Dept,
+    budget CHECK (budget > 0)
+);
+
+CREATE TABLE Works OF Work_t (
+    wemp REFERENCES Emp,
+    wproj REFERENCES Proj,
+    since NOT NULL,
+    hours CHECK (hours > 0)
+);
+
+CREATE OR REPLACE TRIGGER trg_check_dependents
+BEFORE INSERT OR UPDATE ON Emp
+FOR EACH ROW
+DECLARE
+  d Depend_t;
+BEGIN
+  FOR i IN 1 .. :NEW.dependents.COUNT LOOP
+    d := :NEW.dependents(i);
+
+    IF d.gender NOT IN ('M','F') THEN
+      RAISE_APPLICATION_ERROR(-20001, 'Gender must be M or F');
+    END IF;
+
+    IF d.relationship NOT IN ('SPOUSE','CHILD') THEN
+      RAISE_APPLICATION_ERROR(-20002, 'Relationship must be SPOUSE or CHILD');
+    END IF;
+
+    IF d.bdate > SYSDATE THEN
+      RAISE_APPLICATION_ERROR(-20003, 'Birth date cannot be in the future');
+    END IF;
+  END LOOP;
+END;
+/
+
+INSERT INTO Dept VALUES (1, 'Data Mining', NULL);
+INSERT INTO Dept VALUES (2, 'AI Research', NULL);
+
+INSERT INTO Emp
+SELECT 2143, 'John', REF(d), 50000,
+       Dependtb_t(
+           Depend_t('Anna','F',DATE '2005-06-12','CHILD'),
+           Depend_t('Mary','F',DATE '1985-04-10','SPOUSE')
+       )
+FROM Dept d
+WHERE d.dno = 1;
+
+INSERT INTO Emp
+SELECT 3001, 'David', REF(d), 60000,
+       Dependtb_t()
+FROM Dept d
+WHERE d.dno = 2;
+
+--a
+
+ALTER TYPE Emp_t ADD MEMBER FUNCTION child_allowance RETURN NUMBER CASCADE;
+/
+
+CREATE OR REPLACE TYPE BODY Emp_t AS
+
+    MEMBER FUNCTION child_allowance RETURN NUMBER IS
+        child_count NUMBER := 0;
+    BEGIN
+        IF dependents IS NOT NULL THEN
+            FOR i IN 1 .. dependents.COUNT LOOP
+                IF dependents(i).relationship = 'CHILD' THEN
+                    child_count := child_count + 1;
+                END IF;
+            END LOOP;
+        END IF;
+
+        RETURN salary * 0.05 * child_count;
+    END;
+
+END;
+/
+
+
+--b
+
+SELECT e.ename,
+       e.salary,
+       e.child_allowance() AS allowance
+FROM Emp e;
+
+
+--c
+
+INSERT INTO TABLE(
+    SELECT e.dependents
+    FROM Emp e
+    WHERE e.eno = 2143
+)
+VALUES (
+    Depend_t('Jeremy','M', DATE '2001-03-12','CHILD')
+);
+
+
+--d
+
+ALTER TYPE Emp_t ADD MEMBER FUNCTION bonus(rate NUMBER) RETURN NUMBER CASCADE;
+/
+
+
+CREATE OR REPLACE TYPE BODY Emp_t AS
+
+    MEMBER FUNCTION child_allowance RETURN NUMBER IS
+        child_count NUMBER := 0;
+    BEGIN
+        IF dependents IS NOT NULL THEN
+            FOR i IN 1 .. dependents.COUNT LOOP
+                IF dependents(i).relationship = 'CHILD' THEN
+                    child_count := child_count + 1;
+                END IF;
+            END LOOP;
+        END IF;
+
+        RETURN salary * 0.05 * child_count;
+    END;
+
+    MEMBER FUNCTION bonus(rate NUMBER) RETURN NUMBER IS
+    BEGIN
+        RETURN salary * rate / 100;
+    END;
+
+END;
+/
+
+
+--e
+
+SELECT e.ename,
+       e.bonus(12) AS bonus_amount
+FROM Emp e
+WHERE DEREF(e.edept).dname = 'Data Mining';
